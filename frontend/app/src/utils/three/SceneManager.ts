@@ -144,4 +144,12 @@ export class SceneManager {
   public getAnimationCount(): number {
     return this.animationCnt;
   }
+
+  public getCamera(): THREE.PerspectiveCamera {
+    return this.camera;
+  }
+
+  public setCamera(camera: THREE.PerspectiveCamera) {
+    this.camera = camera;
+  }
 }

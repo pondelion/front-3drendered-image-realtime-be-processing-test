@@ -11,7 +11,14 @@ python = "^3.9"
 fastapi = "^0.109.0"
 uvicorn = {extras = ["standard"], version = "^0.26.0"}
 opencv-python = "^4.9.0.80"
+transformers = "^4.37.0"
 
+
+[[tool.poetry.source]]
+name = "torch_cu121"
+url = "https://download.pytorch.org/whl/cu121"
+default = false
+secondary = false
 
 [build-system]
 requires = ["poetry-core"]
