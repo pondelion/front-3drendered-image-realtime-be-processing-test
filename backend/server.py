@@ -9,7 +9,7 @@ import cv2
 from PIL import Image
 
 from image_utils import decode_base64_image_url, encode_to_base64_image_url
-from ai import owlvit_detect
+from ai import owlvit_detect, apply_stream_diffusion_img2img
 
 
 class ConnectionManager:
@@ -53,7 +53,7 @@ class WSMessageHandler:
             #     if len(od_preds) > 0:
             #         print(od_preds)
 
-            if self._bboxes is not None and self._image is not None:
+            if self._bboxes is not None and self._seg_image is not None:
                 for bbox in self._bboxes:
                     obj_tag = bbox['obj_tag']
                     x1 = bbox['bbox']['top_left_x']
@@ -63,16 +63,24 @@ class WSMessageHandler:
                     if all([0.0 <= v <= 1.0 for v in (x1, y1, x2, y2)]):
                         y1 = -y1 + 1.0
                         y2 = -y2 + 1.0
-                        x1 = int(self._image.shape[1] * x1)
-                        y1 = int(self._image.shape[0] * y1)
-                        x2 = int(self._image.shape[1] * x2)
-                        y2 = int(self._image.shape[0] * y2)
+                        x1 = int(self._seg_image.shape[1] * x1)
+                        y1 = int(self._seg_image.shape[0] * y1)
+                        x2 = int(self._seg_image.shape[1] * x2)
+                        y2 = int(self._seg_image.shape[0] * y2)
                         cv2.rectangle(
-                            self._image, pt1=(x1, y1), pt2=(x2, y2), color=(0, 255, 0),
-                            thickness=3, lineType=cv2.LINE_4,shift=0
+                            self._seg_image, pt1=(x1, y1), pt2=(x2, y2), color=(0, 255, 0),
+                            thickness=1, lineType=cv2.LINE_4, shift=0
                         )
             if self._image is not None:
                 # print(datetime.now(), 'send')
+                pil_image = Image.fromarray(self._image[:, :, ::-1])
+                pil_image = apply_stream_diffusion_img2img(pil_image, prompt='realistic, cyberpunk')
+                pil_image = pil_image.resize((self._image.shape[1], self._image.shape[0]))
+                pil_image.convert('RGB').save('./tmp.jpg')
+                # print(pil_image.size)
+                self._image = np.array(pil_image)
+                # self._image = self._image[:, :, [2, 1, 0]]
+                self._image = cv2.cvtColor(self._image, cv2.COLOR_RGB2BGR)
                 cv2.putText(self._image, f"from server {datetime.now()}", (20, 50), cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 0, 0))
                 self._image_url = encode_to_base64_image_url(self._image)
                 params = {'image': self._image_url}
