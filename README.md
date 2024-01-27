@@ -1,3 +1,3 @@
 # front-3drendered-image-realtime-be-processing-test
 
-<div><video controls src="https://raw.githubusercontent.com/pondelion/front-3drendered-image-realtime-be-processing-test/main/backend/sample/sample_record.mp4" muted="false"></video></div>
+https://github.com/pondelion/front-3drendered-image-realtime-be-processing-test/assets/7041748/9248938d-00a1-4b36-a9e8-c35f29677ed9

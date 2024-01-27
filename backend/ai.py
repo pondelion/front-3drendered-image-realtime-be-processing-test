@@ -1,13 +1,17 @@
-from typing import List, Union
+from typing import List, Optional, Union
 
 from transformers import pipeline
 from PIL.Image import Image as PILImage
+import numpy as np
 
 from StreamDiffusion.utils.wrapper import StreamDiffusionWrapper
 
 
 owlvit = None
 stream_diffusion_img2img = None
+mobile_sam = None
+mobile_sam_mask_generator = None
+mobile_sam_predictor = None
 
 
 def owlvit_detect(image: PILImage, labels: List[str]):
@@ -57,15 +61,47 @@ def apply_stream_diffusion_img2img(
             cfg_type=cfg_type,
             seed=seed,
         )
-    stream_diffusion_img2img.prepare(
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        num_inference_steps=50,
-        guidance_scale=guidance_scale,
-        delta=delta,
-    )
-    image_tensor = stream_diffusion_img2img.preprocess_image(image)
-    for _ in range(stream_diffusion_img2img.batch_size - 1):
-        stream_diffusion_img2img(image=image_tensor)
-    output_image = stream_diffusion_img2img(image=image_tensor)
+    # stream_diffusion_img2img.prepare(
+    #     prompt=prompt,
+    #     negative_prompt=negative_prompt,
+    #     num_inference_steps=50,
+    #     guidance_scale=guidance_scale,
+    #     delta=delta,
+    # )
+    # image_tensor = stream_diffusion_img2img.preprocess_image(image)
+    # for _ in range(stream_diffusion_img2img.batch_size - 1):
+    #     stream_diffusion_img2img(image=image_tensor)
+    # output_image = stream_diffusion_img2img(image=image_tensor)
+    output_image = stream_diffusion_img2img.img2img(image, prompt=prompt)
     return output_image
+
+
+def mobilesam_detect(
+    image: PILImage,
+    points: Optional[np.ndarray] = None,
+    labels: Optional[np.ndarray] = None,
+    device="cuda"
+):
+    global mobile_sam
+    global mobile_sam_mask_generator
+    global mobile_sam_predictor
+    if mobile_sam is None:
+        from mobile_sam import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
+        model_type = "vit_t"
+        sam_checkpoint = "MobileSAM/weights/mobile_sam.pt"
+        mobile_sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+        mobile_sam.eval()
+        mobile_sam.to(device=device)
+        mobile_sam_mask_generator = SamAutomaticMaskGenerator(mobile_sam)
+        mobile_sam_predictor = SamPredictor(mobile_sam)
+
+    if points is None:
+        assert mobile_sam_mask_generator is not None
+        masks = mobile_sam_mask_generator.generate(image)
+        return masks
+    else:
+        assert mobile_sam_predictor is not None
+        masks, scores, logits = mobile_sam_predictor.predict(
+            point_coords=points, point_labels=labels, multimask_output=True,
+        )
+        return masks, scores, logits
