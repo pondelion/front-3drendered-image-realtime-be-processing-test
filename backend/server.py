@@ -13,7 +13,11 @@ import cv2
 from PIL import Image
 
 from image_utils import decode_base64_image_url, encode_to_base64_image_url
-from ai import owlvit_detect, apply_stream_diffusion_img2img
+from ai import (
+    owlvit_detect,
+    apply_stream_diffusion_img2img,
+    apply_sd_inpaint,
+)
 
 
 class ImageProcessWorker:
@@ -63,8 +67,11 @@ class ImageProcessWorker:
             if self._ws_message_handler._image is not None:
                 # print(datetime.now(), 'send')
                 image = self._ws_message_handler._image.copy()
+                seg_mask = self._ws_message_handler._seg_mask.copy()
                 pil_image = Image.fromarray(image[:, :, ::-1])
-                pil_image = apply_stream_diffusion_img2img(pil_image, prompt='realistic, cyberpunk')
+                pil_seg_mask = Image.fromarray(np.repeat(seg_mask, 3, axis=-1))
+                # pil_image = apply_stream_diffusion_img2img(pil_image, prompt='realistic, cyberpunk')
+                pil_image = apply_sd_inpaint(pil_image, pil_seg_mask, prompt='a bunch of metalic apples')
                 pil_image = pil_image.resize((image.shape[1], image.shape[0]))
                 # pil_image.convert('RGB').save('./tmp.jpg')
                 # print(pil_image.size)
@@ -112,6 +119,7 @@ class WSMessageHandler:
         self._processed_image = None
         self._processed_image_url = None
         self._seg_image = None
+        self._seg_mask = None
         self._bboxes = None
         self._img_process_worker = ImageProcessWorker(self)
         self._img_process_worker.start()
@@ -155,6 +163,7 @@ class WSMessageHandler:
                         (seg_img[:, :, 2:3] == 0)
                     )
                     self._seg_image = org_img * green_mask
+                    self._seg_mask = 255 * green_mask.astype(np.uint8)
 
                 self._image = org_img
                 if 'bboxes' in data:

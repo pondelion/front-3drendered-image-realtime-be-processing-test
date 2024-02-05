@@ -1,10 +1,10 @@
 from typing import List, Optional, Union
 
+import torch
+from diffusers import AutoPipelineForInpainting, LCMScheduler
 from transformers import pipeline
 from PIL.Image import Image as PILImage
 import numpy as np
-
-from StreamDiffusion.utils.wrapper import StreamDiffusionWrapper
 
 
 owlvit = None
@@ -12,6 +12,7 @@ stream_diffusion_img2img = None
 mobile_sam = None
 mobile_sam_mask_generator = None
 mobile_sam_predictor = None
+sd_inpaint_lcmlora = None
 
 
 def owlvit_detect(image: PILImage, labels: List[str]):
@@ -37,6 +38,7 @@ def apply_stream_diffusion_img2img(
     delta: float = 0.5
     if stream_diffusion_img2img is None:
         print('initializing stream diffusion img2img..')
+        from StreamDiffusion.utils.wrapper import StreamDiffusionWrapper
         model_id_or_path: str = "KBlueLeaf/kohaku-v2.1"
         lora_dict = None
         width: int = 512
@@ -105,3 +107,36 @@ def mobilesam_detect(
             point_coords=points, point_labels=labels, multimask_output=True,
         )
         return masks, scores, logits
+
+
+def apply_sd_inpaint(
+    image: PILImage,
+    mask: PILImage,
+    prompt: str,
+    num_inference_steps: int = 3,
+    guidance_scale: int = 4,
+) -> PILImage:
+    global sd_inpaint_lcmlora
+    if sd_inpaint_lcmlora is None:
+        sd_inpaint_lcmlora = AutoPipelineForInpainting.from_pretrained(
+            "runwayml/stable-diffusion-inpainting",
+            torch_dtype=torch.float16,
+            variant="fp16",
+        ).to("cuda")
+        # set scheduler
+        sd_inpaint_lcmlora.scheduler = LCMScheduler.from_config(
+            sd_inpaint_lcmlora.scheduler.config
+        )
+        # load LCM-LoRA
+        sd_inpaint_lcmlora.load_lora_weights("latent-consistency/lcm-lora-sdv1-5")
+        sd_inpaint_lcmlora.set_progress_bar_config(leave=False)
+    generator = torch.manual_seed(0)
+    image_gen = sd_inpaint_lcmlora(
+        prompt=prompt,
+        image=image,
+        mask_image=mask,
+        generator=generator,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
+    ).images[0]
+    return image_gen
